@@ -42,3 +42,77 @@ MARKDOWN_EXTENSIONS = [
     'markdown.extensions.tables',
     'markdown.extensions.toc'
 ]
+
+# HTML template
+HTML_TEMPLATE = """
+<div class="article-content">
+    {content}
+</div>
+<style>
+    .article-content {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 15px;
+    }
+    .article-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1em auto;
+    }
+    .article-content pre {
+        background-color: #f6f8fa;
+        border-radius: 3px;
+        padding: 16px;
+        overflow: auto;
+    }
+    .article-content code {
+        font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        background-color: #f6f8fa;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    .article-content h1,
+    .article-content h2,
+    .article-content h3,
+    .article-content h4,
+    .article-content h5,
+    .article-content h6 {
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+    .article-content p {
+        margin-bottom: 16px;
+    }
+    .article-content ul,
+    .article-content ol {
+        margin-bottom: 16px;
+        padding-left: 2em;
+    }
+    .article-content blockquote {
+        padding: 0 1em;
+        color: #6a737d;
+        border-left: 0.25em solid #dfe2e5;
+        margin: 0 0 16px 0;
+    }
+    .article-content table {
+        border-spacing: 0;
+        border-collapse: collapse;
+        margin-bottom: 16px;
+        width: 100%;
+    }
+    .article-content table th,
+    .article-content table td {
+        padding: 6px 13px;
+        border: 1px solid #dfe2e5;
+    }
+    .article-content table tr:nth-child(2n) {
+        background-color: #f6f8fa;
+    }
+</style>
+"""

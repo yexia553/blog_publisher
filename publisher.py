@@ -3,7 +3,7 @@
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date
 import frontmatter
 from pathlib import Path
 import logging
@@ -52,8 +52,13 @@ class ImageCache:
         self.cache[key] = value
         self._save_cache()
 
+class ConfigurationError(Exception):
+    """配置错误异常"""
+    pass
+
 class WeChatPublisher:
     def __init__(self):
+        self._validate_config()
         self.robot = WeRoBot()
         self.robot.config["APP_ID"] = WECHAT_CONFIG["APP_ID"]
         self.robot.config["APP_SECRET"] = WECHAT_CONFIG["APP_SECRET"]
@@ -61,9 +66,50 @@ class WeChatPublisher:
         self.token = self.client.grant_token()
         self.image_cache = ImageCache(CACHE_FILE)
         
+    def _validate_config(self):
+        """验证配置是否有效"""
+        if not WECHAT_CONFIG.get("APP_ID"):
+            raise ConfigurationError("WeChat APP_ID is not configured")
+        if not WECHAT_CONFIG.get("APP_SECRET"):
+            raise ConfigurationError("WeChat APP_SECRET is not configured")
+            
+        if not os.path.exists(BLOG_DIR):
+            raise ConfigurationError(f"Blog directory {BLOG_DIR} does not exist")
+            
+        if ORIGINAL_LINK_CONFIG["enabled"]:
+            if not ORIGINAL_LINK_CONFIG.get("base_url"):
+                raise ConfigurationError("Original link base_url is not configured")
+            if not ORIGINAL_LINK_CONFIG.get("template"):
+                raise ConfigurationError("Original link template is not configured")
+                
+    def parse_date(self, date_value) -> Optional[datetime]:
+        """统一处理日期格式"""
+        if not date_value:
+            return None
+            
+        if isinstance(date_value, datetime):
+            return date_value
+        elif isinstance(date_value, date):
+            return datetime.combine(date_value, datetime.min.time())
+        elif isinstance(date_value, str):
+            try:
+                return parser.parse(date_value)
+            except Exception as e:
+                logger.error(f"Error parsing date {date_value}: {str(e)}")
+                return None
+        return None
+
+    def is_publish_date(self, post_date: datetime) -> bool:
+        """检查是否应该发布这篇文章"""
+        if not post_date:
+            return False
+            
+        today = datetime.now().date()
+        post_date = post_date.date() if isinstance(post_date, datetime) else post_date
+        return post_date == today
+
     def get_todays_posts(self) -> List[Path]:
         """获取今天需要发布的文章"""
-        today = datetime.now().strftime('%Y-%m-%d')
         posts = []
         
         for subdir in BLOG_SUBDIRS:
@@ -74,10 +120,8 @@ class WeChatPublisher:
             for post in blog_path.glob('**/*.md'):
                 try:
                     post_data = frontmatter.load(post)
-                    post_date = post_data.get('date')
-                    if isinstance(post_date, str):
-                        post_date = parser.parse(post_date).strftime('%Y-%m-%d')
-                    if post_date == today:
+                    post_date = self.parse_date(post_data.get('date'))
+                    if post_date and self.is_publish_date(post_date):
                         posts.append(post)
                 except Exception as e:
                     logger.error(f"Error processing {post}: {str(e)}")
@@ -176,55 +220,23 @@ class WeChatPublisher:
             post = frontmatter.load(post_path)
             title = post.get('title', post_path.stem)
             content = post.content
-            post_date = post.get('date')
+            post_date = self.parse_date(post.get('date'))
             
             # 处理图片
             processed_content, cover_image = self.process_post_images(content, post_path.parent)
             
             # 生成原文链接
             original_link = None
-            if isinstance(post_date, (datetime, str)):
-                if isinstance(post_date, str):
-                    post_date = parser.parse(post_date)
+            if post_date:
                 original_link = self.get_original_link(post_path, post_date)
             
             # 添加页脚
             final_content = processed_content + "\n" + ARTICLE_FOOTER
             
-            # 转换为HTML，添加样式
-            html_content = f"""
-            <div class="article-content">
-                {markdown.markdown(final_content, extensions=MARKDOWN_EXTENSIONS)}
-            </div>
-            <style>
-                .article-content {{
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    max-width: 100%;
-                    margin: 0 auto;
-                    padding: 15px;
-                }}
-                .article-content img {{
-                    max-width: 100%;
-                    height: auto;
-                    display: block;
-                    margin: 1em auto;
-                }}
-                .article-content pre {{
-                    background-color: #f6f8fa;
-                    border-radius: 3px;
-                    padding: 16px;
-                    overflow: auto;
-                }}
-                .article-content code {{
-                    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-                    background-color: #f6f8fa;
-                    padding: 2px 4px;
-                    border-radius: 3px;
-                }}
-            </style>
-            """
+            # 转换为HTML
+            html_content = HTML_TEMPLATE.format(
+                content=markdown.markdown(final_content, extensions=MARKDOWN_EXTENSIONS)
+            )
             
             # 创建图文消息
             articles = [{
@@ -249,6 +261,7 @@ class WeChatPublisher:
             
         except Exception as e:
             logger.error(f"Error publishing {post_path}: {str(e)}")
+            raise
             
     def run(self):
         """运行发布程序"""
