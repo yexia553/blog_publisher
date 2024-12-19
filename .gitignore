@@ -1,0 +1,4 @@
+.vscode/
+venv/
+processed_blogs/
+**/__pycache__/

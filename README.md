@@ -13,17 +13,20 @@
 ## 安装
 
 1. 克隆仓库：
+
 ```bash
 git clone [your-repo-url]
 cd blog_publisher
 ```
 
 2. 安装依赖：
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. 配置环境变量：
+
 ```bash
 export WECHAT_APP_ID="your_app_id"
 export WECHAT_APP_SECRET="your_app_secret"
@@ -50,6 +53,7 @@ export WECHAT_APP_SECRET="your_app_secret"
 ## 使用方法
 
 直接运行脚本：
+
 ```bash
 python publisher.py
 ```
