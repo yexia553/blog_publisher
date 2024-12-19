@@ -11,7 +11,7 @@ from typing import List, Dict, Optional
 import markdown
 from werobot import WeRoBot
 import requests
-from config import *
+from wechat_config import *
 import time
 import pickle
 import hashlib
@@ -145,29 +145,60 @@ class WeChatPublisher:
             return None
         return wrapper
 
-    def upload_image(self, image_path: str) -> Optional[str]:
-        """上传图片到微信，返回media_id"""
-        # 检查缓存
-        image_hash = hashlib.md5(open(image_path, 'rb').read()).hexdigest()
-        cached_url = self.image_cache.get(image_hash)
-        if cached_url:
-            return cached_url
-            
-        @self.retry_operation
-        def _upload():
-            with open(image_path, 'rb') as f:
-                response = self.client.upload_media('image', f)
-                return response['url']
+    def process_post_images(self, content: str, post_dir: Path) -> tuple:
+        """Process article images and return processed content and first image's media_id"""
+        import re
         
-        try:
-            url = _upload()
-            if url:
-                self.image_cache.set(image_hash, url)
-            return url
-        except Exception as e:
-            logger.error(f"Error uploading image {image_path}: {str(e)}")
-            return None
-            
+        first_image_media_id = None
+        image_mappings = {}
+        
+        # Match all possible Markdown image syntax
+        image_patterns = [
+            r'!\[([^\]]*)\]\(([^)]+)\)',  # ![alt](url)
+            r'<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>',  # <img src="url" />
+        ]
+        
+        for pattern in image_patterns:
+            matches = re.finditer(pattern, content)
+            for match in matches:
+                image_path = match.group(2) if '](' in pattern else match.group(1)
+                if not image_path.startswith(('http://', 'https://')):
+                    absolute_image_path = str(post_dir / image_path)
+                    if os.path.exists(absolute_image_path):
+                        # Upload image and get media_id for WeChat
+                        with open(absolute_image_path, 'rb') as f:
+                            try:
+                                response = self.client.upload_media('image', f)
+                                if not first_image_media_id:
+                                    first_image_media_id = response['media_id']
+                                # Get permanent URL for article content
+                                image_url = response.get('url')
+                                if image_url:
+                                    image_mappings[image_path] = image_url
+                            except Exception as e:
+                                logger.error(f"Error uploading image {absolute_image_path}: {str(e)}")
+        
+        # Replace image links in content
+        for old_path, new_url in image_mappings.items():
+            content = content.replace(old_path, new_url)
+        
+        # If no cover image found, upload default cover
+        if not first_image_media_id:
+            try:
+                response = requests.get(DEFAULT_COVER_IMAGE)
+                if response.status_code == 200:
+                    from tempfile import NamedTemporaryFile
+                    with NamedTemporaryFile(suffix='.jpg') as temp_file:
+                        temp_file.write(response.content)
+                        temp_file.flush()
+                        with open(temp_file.name, 'rb') as f:
+                            response = self.client.upload_media('image', f)
+                            first_image_media_id = response['media_id']
+            except Exception as e:
+                logger.error(f"Error uploading default cover image: {str(e)}")
+        
+        return content, first_image_media_id
+
     def get_original_link(self, post_path: Path, post_date: datetime) -> Optional[str]:
         """生成原文链接"""
         if not ORIGINAL_LINK_CONFIG["enabled"]:
@@ -182,66 +213,38 @@ class WeChatPublisher:
             filename=filename
         )
 
-    def process_post_images(self, content: str, post_dir: Path) -> tuple:
-        """处理文章中的图片，返回处理后的内容和第一张图片的URL"""
-        import re
-        
-        first_image_url = None
-        image_mappings = {}
-        
-        # 使用正则表达式匹配所有可能的Markdown图片语法
-        image_patterns = [
-            r'!\[([^\]]*)\]\(([^)]+)\)',  # ![alt](url)
-            r'<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>',  # <img src="url" />
-        ]
-        
-        for pattern in image_patterns:
-            matches = re.finditer(pattern, content)
-            for match in matches:
-                image_path = match.group(2) if '](' in pattern else match.group(1)
-                if not image_path.startswith(('http://', 'https://')):
-                    absolute_image_path = str(post_dir / image_path)
-                    if os.path.exists(absolute_image_path):
-                        new_url = self.upload_image(absolute_image_path)
-                        if new_url:
-                            image_mappings[image_path] = new_url
-                            if not first_image_url:
-                                first_image_url = new_url
-        
-        # 替换图片链接
-        for old_path, new_url in image_mappings.items():
-            content = content.replace(old_path, new_url)
-            
-        return content, first_image_url or DEFAULT_COVER_IMAGE
-        
     def publish_post(self, post_path: Path):
-        """发布单篇文章到微信公众号"""
+        """Publish a single article to WeChat Official Account"""
         try:
             post = frontmatter.load(post_path)
             title = post.get('title', post_path.stem)
             content = post.content
             post_date = self.parse_date(post.get('date'))
             
-            # 处理图片
-            processed_content, cover_image = self.process_post_images(content, post_path.parent)
+            # Process images and get cover image media_id
+            processed_content, cover_media_id = self.process_post_images(content, post_path.parent)
             
-            # 生成原文链接
+            # Generate original link
             original_link = None
             if post_date:
                 original_link = self.get_original_link(post_path, post_date)
             
-            # 添加页脚
+            # Add footer
             final_content = processed_content + "\n" + ARTICLE_FOOTER
             
-            # 转换为HTML
+            # Convert to HTML with code highlighting
             html_content = HTML_TEMPLATE.format(
-                content=markdown.markdown(final_content, extensions=MARKDOWN_EXTENSIONS)
+                content=markdown.markdown(
+                    final_content,
+                    extensions=MARKDOWN_EXTENSIONS,
+                    extension_configs=MARKDOWN_EXTENSION_CONFIGS
+                )
             )
             
-            # 创建图文消息
+            # Create article message
             articles = [{
                 "title": title,
-                "thumb_media_id": cover_image,
+                "thumb_media_id": cover_media_id,
                 "content": html_content,
                 "digest": post.get('description', ''),
                 "author": post.get('author', ''),
@@ -249,11 +252,11 @@ class WeChatPublisher:
                 "show_cover_pic": 1
             }]
             
-            # 上传图文消息
+            # Upload article
             @self.retry_operation
             def _publish():
                 return self.client.upload_news(articles)
-                
+            
             media_id = _publish()
             logger.info(f"Successfully published {title}")
             if original_link:

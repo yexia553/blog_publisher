@@ -23,7 +23,6 @@ CACHE_FILE = "cache.bin"
 BLOG_BASE_URL = "https://panzhixiang.cn"
 IMAGE_BASE_URL = "https://blog.panzhixiang.cn"
 
-
 WECHAT_CONFIG = {
     "APP_ID": os.getenv("WECHAT_APP_ID"),
     "APP_SECRET": os.getenv("WECHAT_APP_SECRET"),
@@ -44,7 +43,6 @@ ORIGINAL_LINK_CONFIG = {
 ARTICLE_FOOTER = """
 ---
 欢迎关注我的公众号：**潘智祥**
-如果您喜欢使用电脑看文章，也可以关注我的博客：[https://panzhixiang.cn](https://panzhixiang.cn)
 """
 
 # Markdown extensions for processing
