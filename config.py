@@ -1,41 +1,69 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+Configuration Module
+
+Contains configuration settings for:
+1. Common settings (blog directories, cache)
+2. Markdown processing (image handling, formatting)
+3. WeChat publishing (API credentials, templates)
+"""
+
 import os
 from pathlib import Path
 
+# =====================
+# Common Configuration
+# =====================
 # Blog directory configuration
-BLOG_DIR = os.path.expanduser("~/blog")  # Change this to your blog directory
-BLOG_SUBDIRS = ["tech", "invest", "reading"]  # Your blog subdirectories
+BLOG_DIR = os.path.expanduser("/Users/felix/workspace/working-notes")
+BLOG_SUBDIRS = ["myNotes"]
 
-# WeChat configuration
+# Cache configuration
+CACHE_FILE = "cache.bin"
+
+# Base URL for blog and images
+BLOG_BASE_URL = "https://panzhixiang.cn"
+IMAGE_BASE_URL = "https://blog.panzhixiang.cn"
+
+# =====================
+# WeChat Configuration
+# =====================
+# WeChat API credentials
 WECHAT_CONFIG = {
     "APP_ID": os.getenv("WECHAT_APP_ID"),
     "APP_SECRET": os.getenv("WECHAT_APP_SECRET"),
 }
 
 # Default cover image if no image in the post
-DEFAULT_COVER_IMAGE = "https://your-default-cover-image-url.jpg"
+DEFAULT_COVER_IMAGE = "https://blog.panzhixiang.cn/images/%E6%9E%B8%E6%9D%9E%E5%B2%9B%E7%9A%84%E6%97%A5%E5%87%BA.jpg"
 
-# 原文链接配置
+# Original article link configuration
 ORIGINAL_LINK_CONFIG = {
-    "enabled": True,  # 是否启用原文链接
-    "base_url": "https://example.com",  # 原文链接的基础URL
-    "template": "{base_url}/{year}/{filename}",  # 原文链接的模板
-    "link_text": "阅读原文",  # 原文链接的显示文本
+    "enabled": True,
+    "base_url": BLOG_BASE_URL,
+    "template": "{base_url}/{year}/{filename}",
+    "link_text": "阅读原文",
+}
+
+# ===========================
+# Markdown Processing Config
+# ===========================
+# Image processing configuration
+IMAGE_CONFIG = {
+    "base_url": IMAGE_BASE_URL,
+    "local_patterns": ["../images/", "./images/", "images/"],
 }
 
 # Article footer template
 ARTICLE_FOOTER = """
 ---
-欢迎关注我的公众号
-如果觉得文章对你有帮助，欢迎点赞、在看、分享~
+欢迎关注我的公众号：**潘智祥**
+如果您喜欢使用电脑看文章，也可以关注我的博客：[https://panzhixiang.cn](https://panzhixiang.cn)
 """
 
-# Cache configuration
-CACHE_FILE = "cache.bin"
-
-# Markdown extensions
+# Markdown extensions for processing
 MARKDOWN_EXTENSIONS = [
     'markdown.extensions.extra',
     'markdown.extensions.codehilite',
@@ -43,7 +71,7 @@ MARKDOWN_EXTENSIONS = [
     'markdown.extensions.toc'
 ]
 
-# HTML template
+# HTML template for rendering
 HTML_TEMPLATE = """
 <div class="article-content">
     {content}
